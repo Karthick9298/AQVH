@@ -41,6 +41,16 @@ export const api = {
     headers: { 'Content-Type': 'application/json' }
   }),
 
+  // Compare molecules
+  compareMolecules: (molecules) => axios.post(`${API_BASE_URL}/compare-molecules`, { molecules }, {
+    headers: { 'Content-Type': 'application/json' }
+  }),
+
+  // Export results
+  exportResults: (data) => axios.post(`${API_BASE_URL}/export-results`, data, {
+    headers: { 'Content-Type': 'application/json' }
+  }),
+
   // Get static file URL
   getStaticUrl: (path) => `http://localhost:5000${path}`
 };

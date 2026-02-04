@@ -8,6 +8,7 @@ import VQESimulation from './pages/VQESimulation';
 import ResultsAnalysis from './pages/ResultsAnalysis';
 import OptimizerComparison from './pages/OptimizerComparison';
 import BondLengthScan from './pages/BondLengthScan';
+import AdvancedAnalytics from './pages/AdvancedAnalytics';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
               <Route path="/results" element={<ResultsAnalysis />} />
               <Route path="/optimizer" element={<OptimizerComparison />} />
               <Route path="/bond-scan" element={<BondLengthScan />} />
+              <Route path="/analytics" element={<AdvancedAnalytics />} />
             </Routes>
           </div>
         </main>

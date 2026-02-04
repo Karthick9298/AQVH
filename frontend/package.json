@@ -1,7 +1,8 @@
 {
-  "name": "aqvh914-frontend",
-  "version": "1.0.0",
+  "name": "aqvh2-frontend",
+  "version": "2.0.0",
   "private": true,
+  "description": "Advanced Quantum Variational Hamiltonian - Enhanced Frontend",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -21,6 +22,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
-  }
+    "preview": "vite preview",
+    "lint": "eslint src --ext js,jsx"
+  },
+  "author": "Karthick",
+  "license": "MIT"
 }

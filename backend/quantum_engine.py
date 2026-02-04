@@ -1,6 +1,7 @@
 """
 Quantum Engine for VQE-based Ground State Energy Estimation
 Supports H2 and LiH molecules
+Enhanced with robust error handling, caching, and improved performance
 """
 
 import numpy as np
@@ -15,6 +16,10 @@ import matplotlib.pyplot as plt
 import os
 import json
 from datetime import datetime
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class QuantumMoleculeEngine:
@@ -26,6 +31,9 @@ class QuantumMoleculeEngine:
         self.hamiltonian = None
         self.vqe_result = None
         self.classical_energy = None
+        self.iteration_data = []
+        
+        logger.info(f"Initialized QuantumMoleculeEngine for {molecule_name}")
         
     def _get_molecule_data(self):
         """Get molecular geometry and properties"""
