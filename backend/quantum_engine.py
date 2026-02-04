@@ -195,23 +195,36 @@ class QuantumMoleculeEngine:
             )
             
             # Create variational form on top of HF state
+            # Use adaptive reps: H2 (2e) needs less complexity than LiH (4e)
+            reps = 1 if self.molecule_data['electrons'] <= 2 else 2
+            
             var_form = TwoLocal(
                 num_qubits=self.hamiltonian.num_qubits,
                 rotation_blocks=['ry', 'rz'],
                 entanglement_blocks='cx',
                 entanglement='linear',
-                reps=1,  # Reduced from 2 to 1 for faster convergence (fewer parameters)
+                reps=reps,
                 skip_final_rotation_layer=False
             )
             
             # Compose: initial_state + variational_form
             ansatz = init_state.compose(var_form)
             
-            # Create optimizer with reasonable tolerance for 30-50 iterations
-            optimizer = SLSQP(
-                maxiter=max_iter,
-                ftol=2e-5  # Relaxed tolerance: achieves chemical accuracy with ~50 iterations
-            )
+            # Create optimizer with adaptive tolerance based on molecule
+            # H2: looser tolerance (faster), LiH: tighter tolerance (better accuracy)
+            ftol = 2e-5 if self.molecule_data['electrons'] <= 2 else 5e-6
+
+            # Use COBYLA for LiH to avoid SLSQP stalling on flat landscapes
+            if self.molecule_data['electrons'] > 2:
+                optimizer = COBYLA(
+                    maxiter=min(max_iter, 400),  # cap to prevent thousands of iterations
+                    tol=1e-4
+                )
+            else:
+                optimizer = SLSQP(
+                    maxiter=max_iter,
+                    ftol=ftol
+                )
             
             # Create estimator
             estimator = StatevectorEstimator()
@@ -280,25 +293,38 @@ class QuantumMoleculeEngine:
             )
             
             # Create variational form on top of HF state
+            # Use adaptive reps: H2 (2e) needs less complexity than LiH (4e)
+            reps = 1 if self.molecule_data['electrons'] <= 2 else 2
+            
             var_form = TwoLocal(
                 num_qubits=self.hamiltonian.num_qubits,
                 rotation_blocks=['ry', 'rz'],
                 entanglement_blocks='cx',
                 entanglement='linear',
-                reps=1,  # Reduced from 2 to 1 for faster convergence (fewer parameters)
+                reps=reps,
                 skip_final_rotation_layer=False
             )
             
             # Compose: initial_state + variational_form
             ansatz = init_state.compose(var_form)
             
-            logger.info(f"Ansatz constructed with {ansatz.num_qubits} qubits and {ansatz.num_parameters} parameters")
+            logger.info(f"Ansatz constructed with {ansatz.num_qubits} qubits, {ansatz.num_parameters} parameters (reps={reps})")
             
-            # Create optimizer with reasonable tolerance for 30-50 iterations
-            optimizer = SLSQP(
-                maxiter=max_iter,
-                ftol=2e-5  # Relaxed tolerance: achieves chemical accuracy with ~50 iterations
-            )
+            # Create optimizer with adaptive tolerance based on molecule
+            # H2: looser tolerance (faster), LiH: tighter tolerance (better accuracy)
+            ftol = 2e-5 if self.molecule_data['electrons'] <= 2 else 5e-6
+
+            # Use COBYLA for LiH to avoid SLSQP stalling on flat landscapes
+            if self.molecule_data['electrons'] > 2:
+                optimizer = COBYLA(
+                    maxiter=min(max_iter, 400),  # cap to prevent thousands of iterations
+                    tol=1e-4
+                )
+            else:
+                optimizer = SLSQP(
+                    maxiter=max_iter,
+                    ftol=ftol
+                )
             
             # Create estimator
             estimator = StatevectorEstimator()
@@ -369,13 +395,15 @@ class QuantumMoleculeEngine:
                 qubit_mapper=JordanWignerMapper()
             )
             
-            # Create variational form
+            # Create variational form with adaptive reps
+            reps = 1 if self.molecule_data['electrons'] <= 2 else 2
+            
             var_form = TwoLocal(
                 num_qubits=self.hamiltonian.num_qubits,
                 rotation_blocks=['ry', 'rz'],
                 entanglement_blocks='cx',
                 entanglement='linear',
-                reps=1,  # Reduced from 2 to 1 for faster convergence
+                reps=reps,
                 skip_final_rotation_layer=False
             )
             
