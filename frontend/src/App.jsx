@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar';
 import Overview from './pages/Overview';
 import MoleculeExplorer from './pages/MoleculeExplorer';
 import HamiltonianViewer from './pages/HamiltonianViewer';
-import VQESimulation from './pages/VQESimulation';
+import VQESimulationRealTime from './pages/VQESimulationRealTime';
 import ResultsAnalysis from './pages/ResultsAnalysis';
 import OptimizerComparison from './pages/OptimizerComparison';
 import BondLengthScan from './pages/BondLengthScan';
@@ -21,7 +21,7 @@ function App() {
               <Route path="/" element={<Overview />} />
               <Route path="/molecules" element={<MoleculeExplorer />} />
               <Route path="/hamiltonian" element={<HamiltonianViewer />} />
-              <Route path="/simulation" element={<VQESimulation />} />
+              <Route path="/simulation" element={<VQESimulationRealTime />} />
               <Route path="/results" element={<ResultsAnalysis />} />
               <Route path="/optimizer" element={<OptimizerComparison />} />
               <Route path="/bond-scan" element={<BondLengthScan />} />

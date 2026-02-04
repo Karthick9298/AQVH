@@ -31,6 +31,7 @@ class QuantumMoleculeEngine:
         self.hamiltonian = None
         self.vqe_result = None
         self.classical_energy = None
+        self.nuclear_repulsion_energy = None
         self.iteration_data = []
         
         logger.info(f"Initialized QuantumMoleculeEngine for {molecule_name}")
@@ -92,7 +93,11 @@ class QuantumMoleculeEngine:
             # Get the problem
             problem = driver.run()
             
-            # Get Hamiltonian
+            # Store nuclear repulsion energy (to add to electronic energy later)
+            self.nuclear_repulsion_energy = problem.nuclear_repulsion_energy
+            logger.info(f"Nuclear repulsion energy: {self.nuclear_repulsion_energy:.6f} Ha")
+            
+            # Get Hamiltonian (electronic energy only)
             hamiltonian = problem.hamiltonian.second_q_op()
             
             # Map to qubits
@@ -202,11 +207,10 @@ class QuantumMoleculeEngine:
             # Compose: initial_state + variational_form
             ansatz = init_state.compose(var_form)
             
-            # Create optimizer with tighter tolerances to use more iterations
+            # Create optimizer with reasonable tolerance for 30-50 iterations
             optimizer = SLSQP(
                 maxiter=max_iter,
-                ftol=1e-9,      # Function tolerance (tighter = more iterations)
-                eps=1.4901161193847656e-08  # Step size for gradient approximation
+                ftol=1e-6  # Good balance: chemical accuracy without excessive iterations
             )
             
             # Create estimator
@@ -216,9 +220,11 @@ class QuantumMoleculeEngine:
             self.iteration_data = []
             
             def callback(eval_count, params, value, metadata):
+                # value is electronic energy only, add nuclear repulsion for total
+                total_energy = float(value) + self.nuclear_repulsion_energy
                 self.iteration_data.append({
                     'iteration': eval_count,
-                    'energy': float(value)
+                    'energy': total_energy  # Store total energy in iterations
                 })
             
             # Run VQE
@@ -231,9 +237,17 @@ class QuantumMoleculeEngine:
             
             self.vqe_result = vqe.compute_minimum_eigenvalue(self.hamiltonian)
             
+            # VQE returns electronic energy, add nuclear repulsion for total energy
+            vqe_electronic = float(self.vqe_result.eigenvalue)
+            vqe_total = vqe_electronic + self.nuclear_repulsion_energy
+            
+            logger.info(f"VQE electronic energy: {vqe_electronic:.6f} Ha")
+            logger.info(f"Nuclear repulsion: {self.nuclear_repulsion_energy:.6f} Ha")
+            logger.info(f"VQE total energy: {vqe_total:.6f} Ha")
+            
             return {
                 'success': True,
-                'vqe_energy': float(self.vqe_result.eigenvalue),
+                'vqe_energy': vqe_total,  # Return total energy (electronic + nuclear)
                 'classical_energy': float(self.classical_energy),
                 'iterations': self.iteration_data,
                 'num_iterations': len(self.iteration_data),
@@ -244,6 +258,98 @@ class QuantumMoleculeEngine:
             import traceback
             print(f"Error in run_vqe: {str(e)}")
             print(traceback.format_exc())
+            return {'success': False, 'error': str(e)}
+    
+    def run_vqe_with_streaming_callback(self, max_iter=100, callback=None):
+        """Run VQE algorithm with custom streaming callback for real-time updates"""
+        try:
+            from qiskit_nature.second_q.mappers import JordanWignerMapper
+            from qiskit_nature.second_q.circuit.library import HartreeFock
+            
+            logger.info(f"Starting VQE with streaming for {self.molecule_name}, max_iter={max_iter}")
+            
+            # Get number of particles and spatial orbitals
+            num_particles = (self.molecule_data['electrons'] // 2, self.molecule_data['electrons'] // 2)
+            num_spatial_orbitals = self.hamiltonian.num_qubits // 2
+            
+            # Create Hartree-Fock initial state
+            init_state = HartreeFock(
+                num_spatial_orbitals=num_spatial_orbitals,
+                num_particles=num_particles,
+                qubit_mapper=JordanWignerMapper()
+            )
+            
+            # Create variational form on top of HF state
+            var_form = TwoLocal(
+                num_qubits=self.hamiltonian.num_qubits,
+                rotation_blocks=['ry', 'rz'],
+                entanglement_blocks='cx',
+                entanglement='linear',
+                reps=2,
+                skip_final_rotation_layer=False
+            )
+            
+            # Compose: initial_state + variational_form
+            ansatz = init_state.compose(var_form)
+            
+            logger.info(f"Ansatz constructed with {ansatz.num_qubits} qubits and {ansatz.num_parameters} parameters")
+            
+            # Create optimizer with reasonable tolerance for 30-50 iterations
+            optimizer = SLSQP(
+                maxiter=max_iter,
+                ftol=1e-6  # Good balance: chemical accuracy without excessive iterations
+            )
+            
+            # Create estimator
+            estimator = StatevectorEstimator()
+            
+            # Track iterations
+            self.iteration_data = []
+            
+            def internal_callback(eval_count, params, value, metadata):
+                # value is electronic energy only, add nuclear repulsion for total
+                total_energy = float(value) + self.nuclear_repulsion_energy
+                iteration_data = {
+                    'iteration': eval_count,
+                    'energy': total_energy  # Store total energy
+                }
+                self.iteration_data.append(iteration_data)
+                logger.info(f"Iteration {eval_count}: Energy = {total_energy:.6f} Ha (electronic: {value:.6f} Ha)")
+                
+                # Call external streaming callback if provided
+                if callback:
+                    callback(eval_count, params, total_energy, metadata)
+            
+            # Run VQE
+            logger.info("Starting VQE computation...")
+            vqe = VQE(
+                estimator=estimator,
+                ansatz=ansatz,
+                optimizer=optimizer,
+                callback=internal_callback
+            )
+            
+            self.vqe_result = vqe.compute_minimum_eigenvalue(self.hamiltonian)
+            
+            # VQE returns electronic energy, add nuclear repulsion for total
+            vqe_electronic = float(self.vqe_result.eigenvalue)
+            vqe_total = vqe_electronic + self.nuclear_repulsion_energy
+            
+            logger.info(f"VQE completed: Electronic energy = {vqe_electronic:.6f} Ha, Total energy = {vqe_total:.6f} Ha after {len(self.iteration_data)} iterations")
+            
+            return {
+                'success': True,
+                'vqe_energy': vqe_total,  # Return total energy (electronic + nuclear)
+                'classical_energy': float(self.classical_energy),
+                'iterations': self.iteration_data,
+                'num_iterations': len(self.iteration_data),
+                'optimal_params': list(self.vqe_result.optimal_point) if hasattr(self.vqe_result, 'optimal_point') else []
+            }
+            
+        except Exception as e:
+            import traceback
+            logger.error(f"Error in run_vqe_with_streaming_callback: {str(e)}")
+            logger.error(traceback.format_exc())
             return {'success': False, 'error': str(e)}
     
     def run_multi_optimizer_vqe(self, max_iter=100):

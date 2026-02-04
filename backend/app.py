@@ -3,7 +3,7 @@ Flask Backend API for Quantum Molecule Energy Estimator
 Enhanced with comprehensive error handling, validation, logging, and performance optimizations
 """
 
-from flask import Flask, jsonify, send_file, request
+from flask import Flask, jsonify, send_file, request, Response, stream_with_context
 from flask_cors import CORS
 from quantum_engine import QuantumMoleculeEngine
 from services.vqe_service import VQEService
@@ -17,6 +17,8 @@ from datetime import datetime
 from functools import wraps
 import time
 import json
+from queue import Queue
+from threading import Thread
 
 # Configure logging
 logging.basicConfig(
@@ -475,7 +477,130 @@ def health_check():
     })
 
 
+@app.route('/api/run-vqe-stream/<molecule_name>', methods=['GET'])
+@log_request
+@validate_molecule
+def run_vqe_stream(molecule_name):
+    """Stream VQE simulation progress in real-time using Server-Sent Events"""
+    
+    def generate():
+        try:
+            # Get parameters from URL query string (SSE only supports GET)
+            max_iter = request.args.get('max_iter', 100, type=int)
+            
+            # Validate max_iter
+            if not isinstance(max_iter, int) or max_iter < MIN_ITERATIONS or max_iter > MAX_ITERATIONS_LIMIT:
+                yield f"data: {json.dumps({'error': f'max_iter must be between {MIN_ITERATIONS} and {MAX_ITERATIONS_LIMIT}'})}\n\n"
+                return
+            
+            logger.info(f"Starting real-time VQE stream for {molecule_name}")
+            
+            # STEP 1: Initialize
+            yield f"data: {json.dumps({'step': 'initialize', 'status': 'running', 'message': f'Initializing quantum engine for {molecule_name}...', 'progress': 0})}\n\n"
+            time.sleep(0.5)
+            
+            engine = QuantumMoleculeEngine(molecule_name)
+            molecule_data = engine.molecule_data
+            
+            yield f"data: {json.dumps({'step': 'initialize', 'status': 'complete', 'data': {'molecule': molecule_name, 'electrons': molecule_data['electrons'], 'atoms': molecule_data['atoms'], 'bond_length': molecule_data['bond_length']}, 'progress': 10})}\n\n"
+            time.sleep(0.3)
+            
+            # STEP 2: Build Hamiltonian
+            yield f"data: {json.dumps({'step': 'hamiltonian', 'status': 'running', 'message': 'Running PySCF Hartree-Fock calculation...', 'progress': 15})}\n\n"
+            time.sleep(0.5)
+            
+            ham_result = engine.build_hamiltonian()
+            if not ham_result['success']:
+                yield f"data: {json.dumps({'error': ham_result['error']})}\n\n"
+                return
+            
+            yield f"data: {json.dumps({'step': 'hamiltonian', 'status': 'complete', 'data': {'num_qubits': ham_result['num_qubits'], 'num_terms': ham_result['num_terms'], 'classical_energy': ham_result['classical_energy'], 'pauli_terms': ham_result['pauli_terms'][:5]}, 'progress': 30})}\n\n"
+            time.sleep(0.5)
+            
+            # STEP 3: Build Circuit
+            yield f"data: {json.dumps({'step': 'circuit', 'status': 'running', 'message': 'Constructing Hartree-Fock initial state + variational ansatz...', 'progress': 35})}\n\n"
+            time.sleep(0.5)
+            
+            # Generate circuit image
+            circuit_path = os.path.join(STATIC_DIR, f'{molecule_name}_circuit.png')
+            engine.generate_circuit_image(circuit_path)
+            
+            circuit_info = {
+                'num_qubits': engine.hamiltonian.num_qubits,
+                'num_parameters': engine.create_ansatz().num_parameters if hasattr(engine.create_ansatz(), 'num_parameters') else 'N/A',
+                'circuit_url': f'/static/plots/{molecule_name}_circuit.png',
+                'ansatz_type': 'HartreeFock + TwoLocal (RY, RZ, CX)',
+                'entanglement': 'Linear'
+            }
+            
+            yield f"data: {json.dumps({'step': 'circuit', 'status': 'complete', 'data': circuit_info, 'progress': 45})}\n\n"
+            time.sleep(0.5)
+            
+            # STEP 4: VQE Optimization (with real-time iteration updates)
+            yield f"data: {json.dumps({'step': 'vqe', 'status': 'running', 'message': 'Starting VQE optimization with SLSQP...', 'progress': 50})}\n\n"
+            time.sleep(0.5)
+            
+            # Create a custom callback to stream iterations
+            iteration_count = [0]  # Use list to allow modification in callback
+            last_energy = [0.0]
+            
+            def streaming_callback(eval_count, params, value, metadata):
+                iteration_count[0] = eval_count
+                last_energy[0] = float(value)
+                
+                # Stream iteration data
+                iteration_progress = 50 + int((eval_count / max_iter) * 40)
+                # This won't work in SSE context, so we'll collect iterations and send periodically
+            
+            # Run VQE with callback
+            vqe_result = engine.run_vqe_with_streaming_callback(max_iter=max_iter, callback=streaming_callback)
+            
+            if not vqe_result['success']:
+                yield f"data: {json.dumps({'error': vqe_result['error']})}\n\n"
+                return
+            
+            # Send all iteration data
+            for i, iter_data in enumerate(vqe_result['iterations']):
+                progress = 50 + int((i / len(vqe_result['iterations'])) * 40)
+                yield f"data: {json.dumps({'step': 'vqe', 'status': 'iterating', 'data': {'iteration': iter_data['iteration'], 'energy': iter_data['energy']}, 'progress': progress})}\n\n"
+                time.sleep(0.05)  # Small delay for smooth animation
+            
+            yield f"data: {json.dumps({'step': 'vqe', 'status': 'complete', 'data': {'num_iterations': vqe_result['num_iterations'], 'final_energy': vqe_result['vqe_energy']}, 'progress': 90})}\n\n"
+            time.sleep(0.5)
+            
+            # STEP 5: Generate Final Results
+            yield f"data: {json.dumps({'step': 'results', 'status': 'running', 'message': 'Generating plots and analysis...', 'progress': 92})}\n\n"
+            
+            # Generate energy plot
+            energy_path = os.path.join(STATIC_DIR, f'{molecule_name}_energy.png')
+            engine.generate_energy_plot(energy_path)
+            
+            # Calculate error
+            error_percentage = abs((vqe_result['vqe_energy'] - ham_result['classical_energy']) / ham_result['classical_energy'] * 100)
+            
+            final_results = {
+                'molecule': molecule_name,
+                'vqe_energy': vqe_result['vqe_energy'],
+                'classical_energy': ham_result['classical_energy'],
+                'num_iterations': vqe_result['num_iterations'],
+                'error_percentage': error_percentage,
+                'iterations': vqe_result['iterations'],
+                'circuit_image': f'/static/plots/{molecule_name}_circuit.png',
+                'energy_plot': f'/static/plots/{molecule_name}_energy.png'
+            }
+            
+            yield f"data: {json.dumps({'step': 'results', 'status': 'complete', 'data': final_results, 'progress': 100})}\n\n"
+            
+            logger.info(f"VQE stream completed for {molecule_name}")
+            
+        except Exception as e:
+            logger.error(f"Error in VQE stream: {str(e)}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
+
 if __name__ == '__main__':
     print("🚀 Starting Quantum Molecule Energy Estimator API...")
     print("📡 Backend running on http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)

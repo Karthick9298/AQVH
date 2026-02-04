@@ -23,6 +23,45 @@ export const api = {
     headers: { 'Content-Type': 'application/json' }
   }),
 
+  // Real-time VQE streaming with Server-Sent Events
+  runVQEStream: (moleculeName, params, onMessage, onError, onComplete) => {
+    // SSE only supports GET, so pass params via URL query string
+    const maxIter = params?.max_iter || 100;
+    const url = `${API_BASE_URL}/run-vqe-stream/${moleculeName}?max_iter=${maxIter}`;
+    
+    // Create EventSource for Server-Sent Events
+    const eventSource = new EventSource(url);
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.error) {
+          onError(data.error);
+          eventSource.close();
+        } else if (data.step === 'results' && data.status === 'complete') {
+          onMessage(data);
+          onComplete(data.data);
+          eventSource.close();
+        } else {
+          onMessage(data);
+        }
+      } catch (error) {
+        console.error('Error parsing SSE data:', error);
+        onError(error.message);
+        eventSource.close();
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      onError('Connection to server lost');
+      eventSource.close();
+    };
+    
+    return eventSource; // Return EventSource so caller can close if needed
+  },
+
   // Get theory
   getTheory: (moleculeName) => axios.get(`${API_BASE_URL}/theory/${moleculeName}`),
 
