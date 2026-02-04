@@ -10,7 +10,7 @@ class VQEService:
     """Service for running VQE simulations"""
     
     @staticmethod
-    def run_simulation(molecule_name, output_dir='static/plots'):
+    def run_simulation(molecule_name, output_dir='static/plots', max_iter=100):
         """Run complete VQE simulation"""
         engine = QuantumMoleculeEngine(molecule_name)
         
@@ -20,7 +20,7 @@ class VQEService:
             return {'success': False, 'error': ham_result['error']}
         
         # Run VQE
-        vqe_result = engine.run_vqe(max_iter=100)
+        vqe_result = engine.run_vqe(max_iter=max_iter)
         if not vqe_result['success']:
             return {'success': False, 'error': vqe_result['error']}
         

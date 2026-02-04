@@ -128,7 +128,11 @@ def get_circuit(molecule_name):
 def run_vqe(molecule_name):
     """Run VQE simulation for a molecule"""
     try:
-        result = VQEService.run_simulation(molecule_name, STATIC_DIR)
+        # Get max_iter from request body
+        data = request.get_json() or {}
+        max_iter = data.get('max_iter', 100)
+        
+        result = VQEService.run_simulation(molecule_name, STATIC_DIR, max_iter=max_iter)
         
         if result['success']:
             return jsonify(result)

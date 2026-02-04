@@ -165,13 +165,41 @@ class QuantumMoleculeEngine:
         return ansatz
     
     def run_vqe(self, max_iter=100):
-        """Run VQE algorithm"""
+        """Run VQE algorithm with proper initialization"""
         try:
-            # Create ansatz
-            ansatz = self.create_ansatz()
+            from qiskit_nature.second_q.mappers import JordanWignerMapper
+            from qiskit_nature.second_q.circuit.library import HartreeFock
             
-            # Create optimizer
-            optimizer = SLSQP(maxiter=max_iter)
+            # Get number of particles and spatial orbitals
+            num_particles = (self.molecule_data['electrons'] // 2, self.molecule_data['electrons'] // 2)
+            num_spatial_orbitals = self.hamiltonian.num_qubits // 2
+            
+            # Create Hartree-Fock initial state
+            init_state = HartreeFock(
+                num_spatial_orbitals=num_spatial_orbitals,
+                num_particles=num_particles,
+                qubit_mapper=JordanWignerMapper()
+            )
+            
+            # Create variational form on top of HF state
+            var_form = TwoLocal(
+                num_qubits=self.hamiltonian.num_qubits,
+                rotation_blocks=['ry', 'rz'],
+                entanglement_blocks='cx',
+                entanglement='linear',
+                reps=2,
+                skip_final_rotation_layer=False
+            )
+            
+            # Compose: initial_state + variational_form
+            ansatz = init_state.compose(var_form)
+            
+            # Create optimizer with tighter tolerances to use more iterations
+            optimizer = SLSQP(
+                maxiter=max_iter,
+                ftol=1e-9,      # Function tolerance (tighter = more iterations)
+                eps=1.4901161193847656e-08  # Step size for gradient approximation
+            )
             
             # Create estimator
             estimator = StatevectorEstimator()
@@ -213,7 +241,33 @@ class QuantumMoleculeEngine:
     def run_multi_optimizer_vqe(self, max_iter=100):
         """Run VQE with multiple optimizers for comparison"""
         try:
-            ansatz = self.create_ansatz()
+            from qiskit_nature.second_q.mappers import JordanWignerMapper
+            from qiskit_nature.second_q.circuit.library import HartreeFock
+            
+            # Get number of particles and spatial orbitals
+            num_particles = (self.molecule_data['electrons'] // 2, self.molecule_data['electrons'] // 2)
+            num_spatial_orbitals = self.hamiltonian.num_qubits // 2
+            
+            # Create initial state
+            init_state = HartreeFock(
+                num_spatial_orbitals=num_spatial_orbitals,
+                num_particles=num_particles,
+                qubit_mapper=JordanWignerMapper()
+            )
+            
+            # Create variational form
+            var_form = TwoLocal(
+                num_qubits=self.hamiltonian.num_qubits,
+                rotation_blocks=['ry', 'rz'],
+                entanglement_blocks='cx',
+                entanglement='linear',
+                reps=2,
+                skip_final_rotation_layer=False
+            )
+            
+            # Compose ansatz
+            ansatz = init_state.compose(var_form)
+            
             estimator = StatevectorEstimator()
             
             optimizers = {

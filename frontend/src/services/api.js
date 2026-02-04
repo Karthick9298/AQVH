@@ -19,19 +19,27 @@ export const api = {
   getCircuit: (moleculeName) => axios.get(`${API_BASE_URL}/circuit/${moleculeName}`),
 
   // Run VQE simulation
-  runVQE: (moleculeName) => axios.post(`${API_BASE_URL}/run-vqe/${moleculeName}`),
+  runVQE: (moleculeName, params = {}) => axios.post(`${API_BASE_URL}/run-vqe/${moleculeName}`, params, {
+    headers: { 'Content-Type': 'application/json' }
+  }),
 
   // Get theory
   getTheory: (moleculeName) => axios.get(`${API_BASE_URL}/theory/${moleculeName}`),
 
   // Run multi-optimizer comparison
-  runMultiOptimizer: (moleculeName) => axios.post(`${API_BASE_URL}/multi-optimizer/${moleculeName}`),
+  runMultiOptimizer: (moleculeName, params = {}) => axios.post(`${API_BASE_URL}/multi-optimizer/${moleculeName}`, params, {
+    headers: { 'Content-Type': 'application/json' }
+  }),
 
   // Run bond length scan
-  bondScan: (moleculeName, params) => axios.post(`${API_BASE_URL}/bond-scan/${moleculeName}`, params),
+  bondScan: (moleculeName, params) => axios.post(`${API_BASE_URL}/bond-scan/${moleculeName}`, params, {
+    headers: { 'Content-Type': 'application/json' }
+  }),
 
   // Get advanced analytics
-  getAnalytics: (moleculeName, iterations) => axios.post(`${API_BASE_URL}/advanced-analytics/${moleculeName}`, { iterations }),
+  getAnalytics: (moleculeName, iterations) => axios.post(`${API_BASE_URL}/advanced-analytics/${moleculeName}`, { iterations }, {
+    headers: { 'Content-Type': 'application/json' }
+  }),
 
   // Get static file URL
   getStaticUrl: (path) => `http://localhost:5000${path}`
