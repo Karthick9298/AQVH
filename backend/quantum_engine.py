@@ -200,7 +200,7 @@ class QuantumMoleculeEngine:
                 rotation_blocks=['ry', 'rz'],
                 entanglement_blocks='cx',
                 entanglement='linear',
-                reps=2,
+                reps=1,  # Reduced from 2 to 1 for faster convergence (fewer parameters)
                 skip_final_rotation_layer=False
             )
             
@@ -210,7 +210,7 @@ class QuantumMoleculeEngine:
             # Create optimizer with reasonable tolerance for 30-50 iterations
             optimizer = SLSQP(
                 maxiter=max_iter,
-                ftol=1e-6  # Good balance: chemical accuracy without excessive iterations
+                ftol=2e-5  # Relaxed tolerance: achieves chemical accuracy with ~50 iterations
             )
             
             # Create estimator
@@ -285,7 +285,7 @@ class QuantumMoleculeEngine:
                 rotation_blocks=['ry', 'rz'],
                 entanglement_blocks='cx',
                 entanglement='linear',
-                reps=2,
+                reps=1,  # Reduced from 2 to 1 for faster convergence (fewer parameters)
                 skip_final_rotation_layer=False
             )
             
@@ -297,7 +297,7 @@ class QuantumMoleculeEngine:
             # Create optimizer with reasonable tolerance for 30-50 iterations
             optimizer = SLSQP(
                 maxiter=max_iter,
-                ftol=1e-6  # Good balance: chemical accuracy without excessive iterations
+                ftol=2e-5  # Relaxed tolerance: achieves chemical accuracy with ~50 iterations
             )
             
             # Create estimator
@@ -375,7 +375,7 @@ class QuantumMoleculeEngine:
                 rotation_blocks=['ry', 'rz'],
                 entanglement_blocks='cx',
                 entanglement='linear',
-                reps=2,
+                reps=1,  # Reduced from 2 to 1 for faster convergence
                 skip_final_rotation_layer=False
             )
             
