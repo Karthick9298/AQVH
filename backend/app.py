@@ -525,19 +525,23 @@ def run_vqe_stream(molecule_name):
             circuit_path = os.path.join(STATIC_DIR, f'{molecule_name}_circuit.png')
             engine.generate_circuit_image(circuit_path)
             
+            # Determine optimizer based on molecule electrons
+            optimizer_name = 'COBYLA' if molecule_data['electrons'] > 2 else 'SLSQP'
+            
             circuit_info = {
                 'num_qubits': engine.hamiltonian.num_qubits,
                 'num_parameters': engine.create_ansatz().num_parameters if hasattr(engine.create_ansatz(), 'num_parameters') else 'N/A',
                 'circuit_url': f'/static/plots/{molecule_name}_circuit.png',
                 'ansatz_type': 'HartreeFock + TwoLocal (RY, RZ, CX)',
-                'entanglement': 'Linear'
+                'entanglement': 'Linear',
+                'optimizer': optimizer_name
             }
             
             yield f"data: {json.dumps({'step': 'circuit', 'status': 'complete', 'data': circuit_info, 'progress': 45})}\n\n"
             time.sleep(0.5)
             
             # STEP 4: VQE Optimization (with real-time iteration updates)
-            yield f"data: {json.dumps({'step': 'vqe', 'status': 'running', 'message': 'Starting VQE optimization with SLSQP...', 'progress': 50})}\n\n"
+            yield f"data: {json.dumps({'step': 'vqe', 'status': 'running', 'message': f'Starting VQE optimization with {optimizer_name}...', 'progress': 50})}\n\n"
             time.sleep(0.5)
             
             # Create a custom callback to stream iterations
@@ -562,10 +566,10 @@ def run_vqe_stream(molecule_name):
             # Send all iteration data
             for i, iter_data in enumerate(vqe_result['iterations']):
                 progress = 50 + int((i / len(vqe_result['iterations'])) * 40)
-                yield f"data: {json.dumps({'step': 'vqe', 'status': 'iterating', 'data': {'iteration': iter_data['iteration'], 'energy': iter_data['energy']}, 'progress': progress})}\n\n"
+                yield f"data: {json.dumps({'step': 'vqe', 'status': 'iterating', 'data': {'iteration': iter_data['iteration'], 'energy': iter_data['energy'], 'optimizer': vqe_result.get('optimizer', optimizer_name)}, 'progress': progress})}\n\n"
                 time.sleep(0.05)  # Small delay for smooth animation
             
-            yield f"data: {json.dumps({'step': 'vqe', 'status': 'complete', 'data': {'num_iterations': vqe_result['num_iterations'], 'final_energy': vqe_result['vqe_energy']}, 'progress': 90})}\n\n"
+            yield f"data: {json.dumps({'step': 'vqe', 'status': 'complete', 'data': {'num_iterations': vqe_result['num_iterations'], 'final_energy': vqe_result['vqe_energy'], 'optimizer': vqe_result.get('optimizer', optimizer_name)}, 'progress': 90})}\n\n"
             time.sleep(0.5)
             
             # STEP 5: Generate Final Results

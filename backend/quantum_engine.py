@@ -254,9 +254,13 @@ class QuantumMoleculeEngine:
             vqe_electronic = float(self.vqe_result.eigenvalue)
             vqe_total = vqe_electronic + self.nuclear_repulsion_energy
             
+            # Determine which optimizer was used
+            optimizer_name = 'COBYLA' if self.molecule_data['electrons'] > 2 else 'SLSQP'
+            
             logger.info(f"VQE electronic energy: {vqe_electronic:.6f} Ha")
             logger.info(f"Nuclear repulsion: {self.nuclear_repulsion_energy:.6f} Ha")
             logger.info(f"VQE total energy: {vqe_total:.6f} Ha")
+            logger.info(f"Optimizer used: {optimizer_name}")
             
             return {
                 'success': True,
@@ -316,14 +320,14 @@ class QuantumMoleculeEngine:
 
             # Use COBYLA for LiH to avoid SLSQP stalling on flat landscapes
             if self.molecule_data['electrons'] > 2:
-                optimizer = COBYLA(
-                    maxiter=min(max_iter, 400),  # cap to prevent thousands of iterations
-                    tol=1e-4
-                )
-            else:
                 optimizer = SLSQP(
                     maxiter=max_iter,
                     ftol=ftol
+                )
+            else:
+                optimizer = COBYLA(
+                    maxiter=min(max_iter, 400),  # cap to prevent thousands of iterations
+                    tol=1e-4
                 )
             
             # Create estimator
@@ -361,7 +365,11 @@ class QuantumMoleculeEngine:
             vqe_electronic = float(self.vqe_result.eigenvalue)
             vqe_total = vqe_electronic + self.nuclear_repulsion_energy
             
+            # Determine which optimizer was used
+            optimizer_name = 'COBYLA' if self.molecule_data['electrons'] > 2 else 'SLSQP'
+            
             logger.info(f"VQE completed: Electronic energy = {vqe_electronic:.6f} Ha, Total energy = {vqe_total:.6f} Ha after {len(self.iteration_data)} iterations")
+            logger.info(f"Optimizer used: {optimizer_name}")
             
             return {
                 'success': True,
@@ -369,7 +377,8 @@ class QuantumMoleculeEngine:
                 'classical_energy': float(self.classical_energy),
                 'iterations': self.iteration_data,
                 'num_iterations': len(self.iteration_data),
-                'optimal_params': list(self.vqe_result.optimal_point) if hasattr(self.vqe_result, 'optimal_point') else []
+                'optimal_params': list(self.vqe_result.optimal_point) if hasattr(self.vqe_result, 'optimal_point') else [],
+                'optimizer': optimizer_name
             }
             
         except Exception as e:

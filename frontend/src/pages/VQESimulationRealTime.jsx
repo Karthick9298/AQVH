@@ -45,6 +45,7 @@ const VQESimulationRealTime = () => {
   const [circuitData, setCircuitData] = useState(null);
   const [vqeIterations, setVqeIterations] = useState([]);
   const [finalResults, setFinalResults] = useState(null);
+  const [optimizerName, setOptimizerName] = useState('SLSQP');
   
   const eventSourceRef = useRef(null);
   
@@ -78,6 +79,7 @@ const VQESimulationRealTime = () => {
     setCircuitData(null);
     setVqeIterations([]);
     setFinalResults(null);
+    setOptimizerName('SLSQP');
     setError(null);
   };
 
@@ -106,9 +108,15 @@ const VQESimulationRealTime = () => {
             setHamiltonianData(data.data);
           } else if (data.step === 'circuit' && data.status === 'complete') {
             setCircuitData(data.data);
+            if (data.data.optimizer) {
+              setOptimizerName(data.data.optimizer);
+            }
           } else if (data.step === 'vqe' && data.status === 'iterating') {
             // Real-time VQE iteration update
             setVqeIterations(prev => [...prev, data.data]);
+            if (data.data.optimizer) {
+              setOptimizerName(data.data.optimizer);
+            }
           } else if (data.step === 'results' && data.status === 'complete') {
             setFinalResults(data.data);
           }
@@ -422,7 +430,7 @@ const VQESimulationRealTime = () => {
               </div>
               <div className="bg-gray-900 p-4 rounded-lg">
                 <p className="text-gray-400 text-sm">Optimizer</p>
-                <p className="text-3xl font-bold text-green-400">SLSQP</p>
+                <p className="text-3xl font-bold text-green-400">{optimizerName}</p>
               </div>
             </div>
 
@@ -432,7 +440,7 @@ const VQESimulationRealTime = () => {
 
             <div className="bg-blue-900/20 border border-blue-700 text-blue-300 px-4 py-3 rounded-lg">
               <p className="text-sm">
-                ✅ <strong>Real Qiskit VQE:</strong> Each point is a real quantum circuit evaluation with SLSQP optimizer
+                ✅ <strong>Real Qiskit VQE:</strong> Each point is a real quantum circuit evaluation with {optimizerName} optimizer
               </p>
             </div>
           </div>
@@ -483,7 +491,7 @@ const VQESimulationRealTime = () => {
               <p className="font-semibold text-lg mb-2">✅ Quantum Simulation Complete!</p>
               <p className="text-sm">
                 Successfully computed ground state energy using real Qiskit VQE algorithm with Hartree-Fock initialization,
-                TwoLocal ansatz, and SLSQP optimizer. All {finalResults.num_iterations} iterations were actual quantum circuit evaluations.
+                TwoLocal ansatz, and {optimizerName} optimizer. All {finalResults.num_iterations} iterations were actual quantum circuit evaluations.
               </p>
             </div>
 
